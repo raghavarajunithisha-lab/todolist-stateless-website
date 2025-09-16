@@ -1,182 +1,118 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const API_URL = "https://l6xyvrdr93.execute-api.us-east-2.amazonaws.com/dev/todos"; 
 
-  // Add new task
-  const addTask = () => {
-    if (input.trim() === "") return;
-    setTasks([...tasks, { id: Date.now(), text: input, completed: false }]);
-    setInput("");
+  // 🟩 Fetch tasks from API
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      const parsedBody = JSON.parse(data.body);
+
+      if (Array.isArray(parsedBody.tasks)) {
+        setTasks(parsedBody.tasks);
+      } else {
+        setTasks([]);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching tasks:", err);
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Toggle complete
-  const toggleTask = (id) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  // 🟩 Add a new task
+  const addTask = async (e) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    const newTask = { task: input };
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newTask),
+      });
+
+      const responseBody = await res.text();
+      console.log("POST response:", responseBody);
+
+      if (!res.ok) throw new Error("Failed to add task");
+
+      await fetchTasks(); // refresh list
+      setInput("");
+    } catch (err) {
+      console.error("❌ Error adding task:", err);
+    }
   };
 
-  // Delete task
-  const deleteTask = (id) => {
-    setTasks(tasks.filter((task) => task.id !== id));
+  // 🟩 Delete a task
+  const deleteTask = async (taskId) => {
+    try {
+      const res = await fetch(`${API_URL}/${taskId}`, {
+        method: "DELETE",
+      });
+      console.log(!res.ok)
+      if (!res.ok) throw new Error("Failed to delete task");
+
+      console.log(`✅ Task ${taskId} deleted`);
+
+      // Remove from UI without waiting for re-fetch
+      setTasks((prevTasks) => prevTasks.filter((t) => t.taskId !== taskId));
+    } catch (err) {
+      console.log("error")
+      console.error("❌ Error deleting task:", err);
+    }
   };
 
   return (
-    <div>
-      {/* Bring over your CSS */}
-      <style>{`
-        :root {
-          --bg: #0b0f14;
-          --card: #111827;
-          --text: #e6edf3;
-          --muted: #9aa4b2;
-          --accent: #6ee7b7;
-          --accent-2: #60a5fa;
-          --radius: 14px;
-          --shadow: 0 8px 24px rgba(0,0,0,0.35);
-          --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
-        }
-        * { box-sizing: border-box; }
-        body {
-          margin:0;
-          font-family: var(--font);
-          background: radial-gradient(1200px 600px at 20% -10%, rgba(96,165,250,.12), transparent 60%),
-                      radial-gradient(900px 500px at 120% 10%, rgba(110,231,183,.10), transparent 55%),
-                      var(--bg);
-          color: var(--text);
-          display:flex;
-          justify-content:center;
-          align-items:center;
-          min-height:100vh;
-          padding:20px;
-        }
-        .box {
-          background: var(--card);
-          border: 1px solid rgba(255,255,255,.05);
-          border-radius: var(--radius);
-          padding: 40px 28px;
-          box-shadow: var(--shadow);
-          width:100%;
-          max-width:420px;
-          text-align:center;
-        }
-        h1 {
-          margin:0 0 20px;
-          font-size: 26px;
-          font-weight:700;
-          letter-spacing:.3px;
-        }
-        form {
-          display:flex;
-          gap:10px;
-        }
-        input {
-          flex:1;
-          padding:12px 14px;
-          border-radius: var(--radius);
-          border:0;
-          outline:0;
-          font-size:15px;
-          background:#0e1622;
-          color:var(--text);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
-        }
-        button {
-          padding:12px 20px;
-          border-radius: var(--radius);
-          border:0;
-          font-weight:700;
-          background: linear-gradient(135deg,var(--accent),var(--accent-2));
-          color:#0b1020;
-          cursor:pointer;
-          opacity:1;
-        }
-        button:disabled {
-          cursor:not-allowed;
-          opacity:.6;
-        }
-        ul {
-          list-style:none;
-          margin:20px 0 0;
-          padding:0;
-          text-align:left;
-        }
-        li {
-          background:#0e1622;
-          border-radius: var(--radius);
-          padding:10px 14px;
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          margin-bottom:10px;
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
-        }
-        li span {
-          flex:1;
-          cursor:pointer;
-        }
-        li span.completed {
-          text-decoration: line-through;
-          color: var(--muted);
-        }
-        li button {
-          background:none;
-          color:#f87171;
-          font-size:16px;
-          padding:4px 8px;
-          cursor:pointer;
-        }
-        li button:hover {
-          color:#ef4444;
-        }
-      `}</style>
+    <div className="box">
+      <h1>Task Manager 📝</h1>
 
-      <div className="box">
-        <h1>Welcome 👋</h1>
+      {/* Input + Add Button */}
+      <form onSubmit={addTask}>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Enter your task…"
+        />
+        <button type="submit" disabled={!input.trim()}>
+          Add
+        </button>
+      </form>
 
-        {/* Input + Add Button */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            addTask();
-          }}
-        >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Enter your task…"
-          />
-          <button type="submit" disabled={!input.trim()}>
-            Add
-          </button>
-        </form>
-
-        {/* Task List */}
+      {/* Task List */}
+      {loading ? (
+        <p>Loading tasks...</p>
+      ) : tasks.length === 0 ? (
+        <p>No tasks found in DynamoDB.</p>
+      ) : (
         <ul>
           {tasks.map((task) => (
-            <li key={task.id}>
-              <span
-                className={task.completed ? "completed" : ""}
-                onClick={() => toggleTask(task.id)}
+            <li key={task.taskId}>
+              {task.taskName} <small>({task.createdAt})</small>
+              {" "}
+              <button 
+                onClick={() => deleteTask(task.taskId)} 
+                style={{ marginLeft: "10px", color: "red", cursor: "pointer" }}
               >
-                {task.text}
-              </span>
-              <button onClick={() => deleteTask(task.id)}>❌</button>
+                ❌
+              </button>
             </li>
           ))}
         </ul>
-
-        {tasks.length === 0 && (
-          <p style={{ marginTop: "14px", fontSize: "13px", color: "var(--muted)" }}>
-            No tasks yet. Add one above!
-          </p>
-        )}
-      </div>
+      )}
     </div>
   );
 }
